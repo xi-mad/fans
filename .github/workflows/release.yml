@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish Portable Package (win-x64)
+        run: |
+          dotnet publish FanController.csproj -c Release -r win-x64 --self-contained false -o publish/FanController-win-x64
+          Compress-Archive -Path "publish/FanController-win-x64/*" -DestinationPath "FanController-${{ github.ref_name }}-win-x64.zip"
+
+      - name: Publish Self-Contained Single-File (win-x64)
+        run: |
+          dotnet publish FanController.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/single
+          Compress-Archive -Path "publish/single/*" -DestinationPath "FanController-${{ github.ref_name }}-win-x64-standalone.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: "FanController ${{ github.ref_name }}"
+          generate_release_notes: true
+          body: |
+            ### FanController ${{ github.ref_name }} 初版发布
+            - **四段式智能负载温控**：支持低负载/中负载/高负载/满载保护独立设定与平滑插值。
+            - **三阶段深度风扇校准**：自动测定满载转速、降速停转阈值（Stop %）与静止起转阈值（Start %）。
+            - **防抖迟滞与开机静默自启**：支持温度滤波、防抖迟滞、系统托盘驻留及无弹窗最高权限开机自启。
+
+            #### 下载说明
+            - `FanController-${{ github.ref_name }}-win-x64.zip`：轻量版（需系统已安装 .NET 10 Desktop Runtime）
+            - `FanController-${{ github.ref_name }}-win-x64-standalone.zip`：独立单文件免安装版（内置运行时，解压即用）
+          files: |
+            FanController-${{ github.ref_name }}-win-x64.zip
+            FanController-${{ github.ref_name }}-win-x64-standalone.zip
